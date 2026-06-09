@@ -35,11 +35,24 @@ public sealed class MainForm : Form
         KeyPreview = true;
         Theme.ApplyToForm(this);
 
-        _store = new MacroStore(Path.Combine(AppContext.BaseDirectory, "macros.json"));
+        var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TinyMouseMacro");
+        Directory.CreateDirectory(appDataDir);
+        _store = new MacroStore(Path.Combine(appDataDir, "macros.json"));
         _positionTimer.Tick += (_, _) => UpdateLivePosition();
 
         var showItem = new ToolStripMenuItem(UiText.TrayShow);
         showItem.Click += (_, _) => ShowFromTray();
+
+        var autoStartItem = new ToolStripMenuItem(UiText.TrayAutoStart);
+        autoStartItem.Checked = AutoStart.IsEnabled();
+        autoStartItem.Click += (_, _) =>
+        {
+            var enable = !autoStartItem.Checked;
+            if (AutoStart.SetEnabled(enable))
+            {
+                autoStartItem.Checked = enable;
+            }
+        };
 
         var exitItem = new ToolStripMenuItem(UiText.TrayExit);
         exitItem.Click += (_, _) => { _reallyClosing = true; Close(); };
@@ -52,6 +65,7 @@ public sealed class MainForm : Form
             ContextMenuStrip = new ContextMenuStrip()
         };
         _trayIcon.ContextMenuStrip.Items.Add(showItem);
+        _trayIcon.ContextMenuStrip.Items.Add(autoStartItem);
         _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _trayIcon.ContextMenuStrip.Items.Add(exitItem);
         _trayIcon.MouseDoubleClick += (_, _) => ShowFromTray();

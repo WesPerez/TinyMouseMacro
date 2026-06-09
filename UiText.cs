@@ -49,6 +49,7 @@ internal static class UiText
     public const string Cancel = "\u53d6\u6d88";
     public const string Confirm = "\u786e\u8ba4";
     public const string TrayShow = "\u663e\u793a\u4e3b\u7a97\u53e3";
+    public const string TrayAutoStart = "\u5f00\u673a\u81ea\u52a8\u542f\u52a8";
     public const string TrayExit = "\u9000\u51fa";
 
     public static string HotkeyUnknownKey(string key) => $"\u65e0\u6cd5\u8bc6\u522b\u6309\u952e\u201c{key}\u201d";
