@@ -6,7 +6,6 @@ public sealed class MainForm : Form
     private readonly MacroExecutor _executor = new();
     private readonly BindingSource _profilesSource = new();
     private readonly BindingSource _stepsSource = new();
-    private readonly Dictionary<string, DateTime> _lastMacroTriggers = [];
     private readonly System.Windows.Forms.Timer _positionTimer = new() { Interval = 100 };
     private CancellationTokenSource? _executionCts;
 
@@ -75,6 +74,14 @@ public sealed class MainForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        const int wmShowWindow = NativeMethods.WmUser + 1;
+
+        if (m.Msg == wmShowWindow)
+        {
+            ShowFromTray();
+            return;
+        }
+
         if (m.Msg == NativeMethods.WmHotkey && _hotkeys?.TryGetProfile(m.WParam.ToInt32(), out var profile) == true && profile is not null)
         {
             RunMacro(profile);
@@ -550,29 +557,13 @@ public sealed class MainForm : Form
 
     private void RebuildHotkeys()
     {
-        if (_hotkeys is not null)
-        {
-            _hotkeys.HotkeyPressed -= Hotkeys_HotkeyPressed;
-        }
-
         _hotkeys ??= new HotkeyService(Handle);
-        _hotkeys.HotkeyPressed += Hotkeys_HotkeyPressed;
         var errors = _hotkeys.RegisterAll(_profiles);
         SetStatus(errors.Count == 0 ? UiText.Ready(_hotkeys.RegisteredCount, _store.FilePath) : string.Join(" | ", errors));
     }
 
-    private void Hotkeys_HotkeyPressed(object? sender, MacroProfile profile)
-    {
-        if (!IsDisposed)
-        {
-            BeginInvoke(() => RunMacro(profile));
-        }
-    }
-
     private void RunMacro(MacroProfile profile)
     {
-        if (IsDuplicateTrigger(profile)) return;
-
         if (_executor.IsRunning)
         {
             SetStatus(UiText.AlreadyRunning);
@@ -633,19 +624,6 @@ public sealed class MainForm : Form
     private void CancelExecution()
     {
         _executionCts?.Cancel();
-    }
-
-    private bool IsDuplicateTrigger(MacroProfile profile)
-    {
-        var key = profile.Id;
-        var now = DateTime.UtcNow;
-        if (_lastMacroTriggers.TryGetValue(key, out var last) && now - last < TimeSpan.FromMilliseconds(250))
-        {
-            return true;
-        }
-
-        _lastMacroTriggers[key] = now;
-        return false;
     }
 
     private void RefreshSteps()

@@ -7,22 +7,14 @@ public sealed class HotkeyService : IDisposable
 {
     private readonly nint _windowHandle;
     private readonly Dictionary<int, RegisteredHotkey> _registeredHotkeys = [];
-    private readonly List<RegisteredHotkey> _fallbackHotkeys = [];
-    private readonly Dictionary<string, DateTime> _lastTriggers = [];
-    private readonly System.Windows.Forms.Timer _pollTimer = new() { Interval = 35 };
-    private NativeMethods.LowLevelKeyboardProc? _keyboardCallback;
-    private nint _keyboardHookHandle;
     private int _nextId = 100;
-
-    public event EventHandler<MacroProfile>? HotkeyPressed;
 
     public HotkeyService(nint windowHandle)
     {
         _windowHandle = windowHandle;
-        _pollTimer.Tick += (_, _) => PollHotkeys();
     }
 
-    public int RegisteredCount => _registeredHotkeys.Count + _fallbackHotkeys.Count;
+    public int RegisteredCount => _registeredHotkeys.Count;
 
     public List<string> RegisterAll(IEnumerable<MacroProfile> profiles)
     {
@@ -32,6 +24,11 @@ public sealed class HotkeyService : IDisposable
 
         foreach (var profile in profiles)
         {
+            if (string.IsNullOrWhiteSpace(profile.Hotkey))
+            {
+                continue;
+            }
+
             if (!HotkeyParser.TryParse(profile.Hotkey, out var modifiers, out var key, out var error))
             {
                 errors.Add($"{profile.Name}: {error}");
@@ -54,18 +51,12 @@ public sealed class HotkeyService : IDisposable
             }
             else
             {
-                var message = new Win32Exception(Marshal.GetLastWin32Error()).Message;
+                var errorCode = Marshal.GetLastWin32Error();
+                var message = new Win32Exception(errorCode).Message;
                 errors.Add($"{profile.Name}: {UiText.HotkeyRegisterFailed(profile.Hotkey, message)}");
-                _fallbackHotkeys.Add(registeredHotkey);
             }
         }
 
-        if (_fallbackHotkeys.Count > 0)
-        {
-            EnsureKeyboardHook();
-        }
-
-        _pollTimer.Enabled = _fallbackHotkeys.Count > 0;
         return errors;
     }
 
@@ -83,109 +74,17 @@ public sealed class HotkeyService : IDisposable
 
     public void Clear()
     {
-        _pollTimer.Enabled = false;
-
         foreach (var id in _registeredHotkeys.Keys)
         {
             NativeMethods.UnregisterHotKey(_windowHandle, id);
         }
 
         _registeredHotkeys.Clear();
-        _fallbackHotkeys.Clear();
-        _lastTriggers.Clear();
-        StopKeyboardHook();
     }
 
     public void Dispose()
     {
         Clear();
-        _pollTimer.Dispose();
-    }
-
-    private void EnsureKeyboardHook()
-    {
-        if (_keyboardHookHandle != 0 || _fallbackHotkeys.Count == 0)
-        {
-            return;
-        }
-
-        _keyboardCallback = KeyboardHookCallback;
-        var moduleHandle = NativeMethods.GetModuleHandleW(null);
-        _keyboardHookHandle = NativeMethods.SetWindowsHookExW(NativeMethods.WhKeyboardLl, _keyboardCallback, moduleHandle, 0);
-    }
-
-    private void StopKeyboardHook()
-    {
-        if (_keyboardHookHandle != 0)
-        {
-            NativeMethods.UnhookWindowsHookEx(_keyboardHookHandle);
-            _keyboardHookHandle = 0;
-        }
-
-        _keyboardCallback = null;
-    }
-
-    private nint KeyboardHookCallback(int nCode, nint wParam, nint lParam)
-    {
-        if (nCode >= 0 && (wParam == NativeMethods.WmKeyDown || wParam == NativeMethods.WmSysKeyDown))
-        {
-            var info = Marshal.PtrToStructure<NativeMethods.Kbdllhookstruct>(lParam);
-            foreach (var hotkey in _fallbackHotkeys)
-            {
-                if (hotkey.Key == info.VkCode && ModifiersMatch(hotkey.Modifiers))
-                {
-                    Trigger(hotkey);
-                    break;
-                }
-            }
-        }
-
-        return NativeMethods.CallNextHookEx(_keyboardHookHandle, nCode, wParam, lParam);
-    }
-
-    private void PollHotkeys()
-    {
-        foreach (var hotkey in _fallbackHotkeys)
-        {
-            if (IsKeyDown((Keys)hotkey.Key) && ModifiersMatch(hotkey.Modifiers))
-            {
-                Trigger(hotkey);
-            }
-        }
-    }
-
-    private void Trigger(RegisteredHotkey hotkey)
-    {
-        var key = hotkey.Profile.Id;
-        var now = DateTime.UtcNow;
-
-        if (_lastTriggers.TryGetValue(key, out var last) && now - last < TimeSpan.FromMilliseconds(300))
-        {
-            return;
-        }
-
-        _lastTriggers[key] = now;
-        HotkeyPressed?.Invoke(this, hotkey.Profile);
-    }
-
-    private static bool ModifiersMatch(uint modifiers)
-    {
-        return ModifierMatches(modifiers, NativeMethods.ModAlt, Keys.Menu, Keys.LMenu, Keys.RMenu)
-            && ModifierMatches(modifiers, NativeMethods.ModControl, Keys.ControlKey, Keys.LControlKey, Keys.RControlKey)
-            && ModifierMatches(modifiers, NativeMethods.ModShift, Keys.ShiftKey, Keys.LShiftKey, Keys.RShiftKey)
-            && ModifierMatches(modifiers, NativeMethods.ModWin, Keys.LWin, Keys.RWin);
-    }
-
-    private static bool ModifierMatches(uint modifiers, uint modifier, params Keys[] keys)
-    {
-        var expected = (modifiers & modifier) != 0;
-        var actual = keys.Any(IsKeyDown);
-        return expected == actual;
-    }
-
-    private static bool IsKeyDown(Keys key)
-    {
-        return (NativeMethods.GetAsyncKeyState((int)key) & 0x8000) != 0;
     }
 
     private sealed record RegisteredHotkey(MacroProfile Profile, uint Modifiers, uint Key, string NormalizedHotkey);
