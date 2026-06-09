@@ -21,17 +21,13 @@ internal static class UiText
     public const string X = "X \u5750\u6807";
     public const string Y = "Y \u5750\u6807";
     public const string DelayMs = "\u7b49\u5f85\u6beb\u79d2";
-    public const string AddMove = "\u6dfb\u52a0\u79fb\u52a8\u52a8\u4f5c";
-    public const string AddClick = "\u6dfb\u52a0\u70b9\u51fb\u52a8\u4f5c";
     public const string AddDelay = "\u6dfb\u52a0\u7b49\u5f85\u52a8\u4f5c";
-    public const string ApplyEdit = "\u5e94\u7528\u4fee\u6539";
     public const string StepType = "\u6b65\u9aa4\u7c7b\u578b";
     public const string TypeMove = "\u79fb\u52a8";
     public const string TypeClick = "\u70b9\u51fb";
     public const string TypeDelay = "\u7b49\u5f85";
     public const string LivePosition = "\u5f53\u524d\u9f20\u6807\u7edd\u5bf9\u5750\u6807";
     public const string ScreenInfo = "\u663e\u793a\u5668\u5750\u6807\u4fe1\u606f";
-    public const string RefreshCoordinates = "\u5237\u65b0\u5750\u6807\u4fe1\u606f";
     public const string Untitled = "\u672a\u547d\u540d";
     public const string Macro = "\u5b8f";
     public const string CopySuffix = " \u526f\u672c";
@@ -39,7 +35,6 @@ internal static class UiText
     public const string DuplicatedProfile = "\u5df2\u590d\u5236\u914d\u7f6e";
     public const string DeletedProfile = "\u5df2\u5220\u9664\u914d\u7f6e";
     public const string DeletedStep = "\u5df2\u5220\u9664\u6b65\u9aa4";
-    public const string SelectStepFirst = "\u8bf7\u5148\u9009\u4e2d\u4e00\u6761\u6b65\u9aa4";
     public const string MoveStepDisplay = "\u79fb\u52a8\u5230";
     public const string ClickStepDisplay = "\u5de6\u952e\u70b9\u51fb";
     public const string DelayStepDisplay = "\u7b49\u5f85";
@@ -48,6 +43,13 @@ internal static class UiText
     public const string HotkeyOnlyOneMainKey = "\u5feb\u6377\u952e\u53ea\u80fd\u5305\u542b\u4e00\u4e2a\u4e3b\u6309\u952e";
     public const string HotkeyNeedsMainKey = "\u5feb\u6377\u952e\u9700\u8981\u4e00\u4e2a\u666e\u901a\u6309\u952e\uff0c\u4f8b\u5982 Alt+Z";
     public const string AdminBoundary = "\u6ce8\u610f\uff1a\u5982\u679c VMware/UU \u5df2\u7ecf\u72ec\u5360\u6355\u83b7\u952e\u76d8\uff0c\u5bbf\u4e3b\u7a0b\u5e8f\u53ef\u80fd\u6536\u4e0d\u5230\u5feb\u6377\u952e\u3002";
+    public const string CancelExecution = "\u53d6\u6d88\u6267\u884c";
+    public const string AlreadyRunning = "\u5f53\u524d\u6709\u5b8f\u6b63\u5728\u6267\u884c\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5";
+    public const string EditStepTitle = "\u7f16\u8f91\u6b65\u9aa4";
+    public const string Cancel = "\u53d6\u6d88";
+    public const string Confirm = "\u786e\u8ba4";
+    public const string TrayShow = "\u663e\u793a\u4e3b\u7a97\u53e3";
+    public const string TrayExit = "\u9000\u51fa";
 
     public static string HotkeyUnknownKey(string key) => $"\u65e0\u6cd5\u8bc6\u522b\u6309\u952e\u201c{key}\u201d";
     public static string HotkeyRegisterFailed(string hotkey, string message) => $"\u5feb\u6377\u952e {hotkey} \u6ce8\u518c\u5931\u8d25\uff08{message}\uff09";
@@ -61,4 +63,5 @@ internal static class UiText
     public static string CountdownCapture(int seconds) => $"\u8bf7\u5728 {seconds} \u79d2\u5185\u628a\u9f20\u6807\u79fb\u5230\u76ee\u6807\u70b9\uff0c\u5230\u65f6\u81ea\u52a8\u53d6\u5750\u6807";
     public static string CapturedPoint(int x, int y) => $"\u5df2\u53d6\u5230\u5750\u6807 ({x}, {y})";
     public static string RecordedClick(int x, int y) => $"\u5df2\u6dfb\u52a0\u70b9\u51fb\u52a8\u4f5c ({x}, {y})";
+    public static string Cancelled(string name) => $"\u5df2\u53d6\u6d88\u6267\u884c\uff1a{name}";
 }

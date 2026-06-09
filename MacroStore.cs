@@ -44,8 +44,15 @@ public sealed class MacroStore
         }
         catch
         {
-            var backupPath = FilePath + ".broken-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
-            File.Copy(FilePath, backupPath, overwrite: false);
+            try
+            {
+                var backupPath = FilePath + ".broken-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                File.Copy(FilePath, backupPath, overwrite: true);
+            }
+            catch
+            {
+            }
+
             return [CreateDefaultProfile()];
         }
     }
