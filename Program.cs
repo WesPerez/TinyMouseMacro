@@ -43,8 +43,15 @@ internal static partial class NativeMethods
     public const int WhMouseLl = 14;
     public const int WmKeyDown = 0x0100;
     public const int WmSysKeyDown = 0x0104;
+    public const int WmKeyUp = 0x0101;
+    public const int WmSysKeyUp = 0x0105;
     public const int WmLbuttonDown = 0x0201;
     public const int WmLbuttonUp = 0x0202;
+    public const int WmRButtonDown = 0x0204;
+    public const int WmMButtonDown = 0x0207;
+    public const int WmXButtonDown = 0x020B;
+    public const int WmMouseWheel = 0x020A;
+    public const int WmMouseMove = 0x0200;
 
     public const uint ModAlt = 0x0001;
     public const uint ModControl = 0x0002;
@@ -54,6 +61,14 @@ internal static partial class NativeMethods
 
     public const uint MouseEventFLeftDown = 0x0002;
     public const uint MouseEventFLeftUp = 0x0004;
+    public const uint MouseEventFRightDown = 0x0008;
+    public const uint MouseEventFRightUp = 0x0010;
+    public const uint MouseEventFMiddleDown = 0x0020;
+    public const uint MouseEventFMiddleUp = 0x0040;
+    public const uint MouseEventFWheel = 0x0800;
+    public const uint KeyeventfKeyup = 0x0002;
+    public const uint KeyeventfUnicode = 0x0004;
+    public const uint InputKeyboard = 1;
 
     public delegate nint LowLevelMouseProc(int nCode, nint wParam, nint lParam);
     public delegate nint LowLevelKeyboardProc(int nCode, nint wParam, nint lParam);
@@ -72,6 +87,12 @@ internal static partial class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, nuint dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, nuint dwExtraInfo);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, [MarshalAs(UnmanagedType.LPArray), In] Input[] pInputs, int cbSize);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern nint SetWindowsHookExW(int idHook, LowLevelMouseProc lpfn, nint hMod, uint dwThreadId);
@@ -106,6 +127,15 @@ internal static partial class NativeMethods
     [DllImport("user32.dll")]
     public static extern nint SendMessageW(nint hWnd, int Msg, nint wParam, nint lParam);
 
+    [DllImport("user32.dll")]
+    public static extern nint GetDC(nint hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern int ReleaseDC(nint hWnd, nint hDC);
+
+    [DllImport("gdi32.dll")]
+    public static extern uint GetPixel(nint hdc, int x, int y);
+
     [StructLayout(LayoutKind.Sequential)]
     public struct Point
     {
@@ -129,6 +159,29 @@ internal static partial class NativeMethods
         public uint VkCode;
         public uint ScanCode;
         public uint Flags;
+        public uint Time;
+        public nint DwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Input
+    {
+        public uint Type;
+        public InputUnion U;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct InputUnion
+    {
+        [FieldOffset(0)] public Keybdinput Ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Keybdinput
+    {
+        public ushort WVk;
+        public ushort WScan;
+        public uint DwFlags;
         public uint Time;
         public nint DwExtraInfo;
     }
