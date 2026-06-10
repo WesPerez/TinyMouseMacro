@@ -20,7 +20,7 @@ internal static class AutoStart
             if (enable)
             {
                 using var key = Registry.CurrentUser.OpenSubKey(KeyPath, writable: true);
-                key?.SetValue(ValueName, Application.ExecutablePath);
+                key?.SetValue(ValueName, Environment.ProcessPath!);
                 return key is not null;
             }
             else
