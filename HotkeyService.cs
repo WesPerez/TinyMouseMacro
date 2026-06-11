@@ -110,7 +110,12 @@ public sealed class HotkeyService : IDisposable
         }
 
         _hookKeyProfiles[keyCode] = profile;
-        EnsureKeyboardHook();
+        var hookError = EnsureKeyboardHook();
+        if (hookError is not null)
+        {
+            _hookKeyProfiles.Remove(keyCode);
+            errors.Add($"{profile.Name}: {hookError}");
+        }
         return errors;
     }
 
@@ -131,13 +136,18 @@ public sealed class HotkeyService : IDisposable
         }
 
         _mouseButtonProfiles[button] = profile;
-        EnsureMouseHook();
+        var hookError = EnsureMouseHook();
+        if (hookError is not null)
+        {
+            _mouseButtonProfiles.Remove(button);
+            errors.Add($"{profile.Name}: {hookError}");
+        }
         return errors;
     }
 
-    private void EnsureKeyboardHook()
+    private string? EnsureKeyboardHook()
     {
-        if (_keyboardHookHandle != 0) return;
+        if (_keyboardHookHandle != 0) return null;
 
         _keyboardProc = KeyboardHookCallback;
         using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
@@ -145,11 +155,20 @@ public sealed class HotkeyService : IDisposable
         var moduleHandle = NativeMethods.GetModuleHandleW(curModule?.ModuleName);
         _keyboardHookHandle = NativeMethods.SetWindowsHookExW(
             NativeMethods.WhKeyboardLl, _keyboardProc, moduleHandle, 0);
+
+        if (_keyboardHookHandle == 0)
+        {
+            _keyboardProc = null;
+            var message = new Win32Exception(Marshal.GetLastWin32Error()).Message;
+            return UiText.HookInstallFailed(UiText.KeyboardHook, message);
+        }
+
+        return null;
     }
 
-    private void EnsureMouseHook()
+    private string? EnsureMouseHook()
     {
-        if (_mouseHookHandle != 0) return;
+        if (_mouseHookHandle != 0) return null;
 
         _mouseProc = MouseHookCallback;
         using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
@@ -157,6 +176,15 @@ public sealed class HotkeyService : IDisposable
         var moduleHandle = NativeMethods.GetModuleHandleW(curModule?.ModuleName);
         _mouseHookHandle = NativeMethods.SetWindowsHookExW(
             NativeMethods.WhMouseLl, _mouseProc, moduleHandle, 0);
+
+        if (_mouseHookHandle == 0)
+        {
+            _mouseProc = null;
+            var message = new Win32Exception(Marshal.GetLastWin32Error()).Message;
+            return UiText.HookInstallFailed(UiText.MouseHook, message);
+        }
+
+        return null;
     }
 
     private nint KeyboardHookCallback(int nCode, nint wParam, nint lParam)
@@ -174,7 +202,7 @@ public sealed class HotkeyService : IDisposable
 
             if (_hookKeyProfiles.TryGetValue(vkCode, out var profile))
             {
-                Task.Run(() => HookTriggered?.Invoke(profile));
+                DispatchHook(profile);
             }
         }
         else if (wParam is NativeMethods.WmKeyUp or NativeMethods.WmSysKeyUp)
@@ -202,7 +230,7 @@ public sealed class HotkeyService : IDisposable
 
             if (button.HasValue && _mouseButtonProfiles.TryGetValue(button.Value, out var profile))
             {
-                Task.Run(() => HookTriggered?.Invoke(profile));
+                DispatchHook(profile);
             }
         }
 
@@ -243,6 +271,10 @@ public sealed class HotkeyService : IDisposable
         _registeredHotkeys.Clear();
         _hookKeyProfiles.Clear();
         _mouseButtonProfiles.Clear();
+        lock (_hookLock)
+        {
+            _pressedHookKeys.Clear();
+        }
 
         if (_keyboardHookHandle != 0)
         {
@@ -263,6 +295,23 @@ public sealed class HotkeyService : IDisposable
     public void Dispose()
     {
         Clear();
+    }
+
+    private void DispatchHook(MacroProfile profile)
+    {
+        var handler = HookTriggered;
+        if (handler is null) return;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                handler(profile);
+            }
+            catch
+            {
+            }
+        });
     }
 
     private sealed record RegisteredHotkey(MacroProfile Profile, uint Modifiers, uint Key, string NormalizedHotkey);

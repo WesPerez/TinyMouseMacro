@@ -1,9 +1,12 @@
-﻿using System.Runtime.InteropServices;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
 
 namespace TinyMouseMacro;
 
 public sealed class RecorderService : IDisposable
 {
+    private const int MoveThrottleMs = 150;
+
     private nint _mouseHookHandle;
     private nint _keyboardHookHandle;
     private NativeMethods.LowLevelMouseProc? _mouseProc;
@@ -11,9 +14,10 @@ public sealed class RecorderService : IDisposable
     private readonly List<MacroStep> _steps = [];
     private readonly object _lock = new();
     private DateTime _lastMoveTime = DateTime.MinValue;
-    private const int MoveThrottleMs = 150;
+    private volatile bool _isRecording;
 
-    public bool IsRecording { get; private set; }
+    public bool IsRecording => _isRecording;
+
     public IReadOnlyList<MacroStep> Steps
     {
         get { lock (_lock) return _steps.ToList(); }
@@ -23,9 +27,10 @@ public sealed class RecorderService : IDisposable
 
     public void Start()
     {
-        if (IsRecording) return;
+        if (_isRecording) return;
+
         lock (_lock) _steps.Clear();
-        IsRecording = true;
+        _isRecording = true;
         _lastMoveTime = DateTime.MinValue;
 
         _mouseProc = MouseHookCallback;
@@ -35,23 +40,34 @@ public sealed class RecorderService : IDisposable
         var moduleHandle = NativeMethods.GetModuleHandleW(curModule?.ModuleName);
 
         _mouseHookHandle = NativeMethods.SetWindowsHookExW(NativeMethods.WhMouseLl, _mouseProc, moduleHandle, 0);
+        if (_mouseHookHandle == 0)
+        {
+            ThrowStartFailed(UiText.MouseHook, Marshal.GetLastWin32Error());
+        }
+
         _keyboardHookHandle = NativeMethods.SetWindowsHookExW(NativeMethods.WhKeyboardLl, _keyboardProc, moduleHandle, 0);
+        if (_keyboardHookHandle == 0)
+        {
+            ThrowStartFailed(UiText.KeyboardHook, Marshal.GetLastWin32Error());
+        }
     }
 
     public List<MacroStep> Stop()
     {
-        IsRecording = false;
+        _isRecording = false;
 
         if (_mouseHookHandle != 0)
         {
             NativeMethods.UnhookWindowsHookEx(_mouseHookHandle);
             _mouseHookHandle = 0;
         }
+
         if (_keyboardHookHandle != 0)
         {
             NativeMethods.UnhookWindowsHookEx(_keyboardHookHandle);
             _keyboardHookHandle = 0;
         }
+
         _mouseProc = null;
         _keyboardProc = null;
 
@@ -60,7 +76,7 @@ public sealed class RecorderService : IDisposable
 
     private nint MouseHookCallback(int nCode, nint wParam, nint lParam)
     {
-        if (nCode >= 0 && IsRecording)
+        if (nCode >= 0 && _isRecording)
         {
             var ms = Marshal.PtrToStructure<NativeMethods.Msllhookstruct>(lParam);
             var pt = ms.Pt;
@@ -68,10 +84,6 @@ public sealed class RecorderService : IDisposable
             if (wParam == NativeMethods.WmLbuttonDown)
             {
                 AddStep(new MacroStep { Type = MacroStepType.LeftClick, X = pt.X, Y = pt.Y });
-            }
-            else if (wParam == NativeMethods.WmLbuttonUp)
-            {
-                // Ignore up events
             }
             else if (wParam == NativeMethods.WmRButtonDown)
             {
@@ -84,7 +96,7 @@ public sealed class RecorderService : IDisposable
             else if (wParam == NativeMethods.WmMouseWheel)
             {
                 var delta = (short)((ms.MouseData >> 16) & 0xFFFF);
-                AddStep(new MacroStep { Type = MacroStepType.MouseWheel, WheelDelta = delta * 120 });
+                AddStep(new MacroStep { Type = MacroStepType.MouseWheel, WheelDelta = delta });
             }
             else if (wParam == NativeMethods.WmMouseMove)
             {
@@ -102,7 +114,7 @@ public sealed class RecorderService : IDisposable
 
     private nint KeyboardHookCallback(int nCode, nint wParam, nint lParam)
     {
-        if (nCode >= 0 && IsRecording && wParam is NativeMethods.WmKeyDown or NativeMethods.WmSysKeyDown)
+        if (nCode >= 0 && _isRecording && wParam is NativeMethods.WmKeyDown or NativeMethods.WmSysKeyDown)
         {
             var kb = Marshal.PtrToStructure<NativeMethods.Kbdllhookstruct>(lParam);
             var vkCode = (int)kb.VkCode;
@@ -119,7 +131,21 @@ public sealed class RecorderService : IDisposable
     private void AddStep(MacroStep step)
     {
         lock (_lock) _steps.Add(step);
-        StepRecorded?.Invoke(step);
+
+        try
+        {
+            StepRecorded?.Invoke(step);
+        }
+        catch
+        {
+        }
+    }
+
+    private void ThrowStartFailed(string hookName, int errorCode)
+    {
+        Stop();
+        var message = new Win32Exception(errorCode).Message;
+        throw new InvalidOperationException(UiText.HookInstallFailed(hookName, message));
     }
 
     private static bool IsModifier(int vk)
@@ -129,6 +155,6 @@ public sealed class RecorderService : IDisposable
 
     public void Dispose()
     {
-        if (IsRecording) Stop();
+        if (_isRecording) Stop();
     }
 }

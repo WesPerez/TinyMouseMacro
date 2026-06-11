@@ -76,9 +76,9 @@ internal static class Theme
     {
         StyleButton(button);
         button.FlatAppearance.BorderColor = Danger;
-        button.BackColor = Color.FromArgb(0xFD, 0xE8, 0xEA);
-        button.ForeColor = Danger;
-        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(0xFC, 0xD4, 0xD8);
+        button.BackColor = IsDark ? Color.FromArgb(0x5A, 0x20, 0x28) : Color.FromArgb(0xFD, 0xE8, 0xEA);
+        button.ForeColor = IsDark ? Color.FromArgb(0xFF, 0x80, 0x80) : Danger;
+        button.FlatAppearance.MouseOverBackColor = IsDark ? Color.FromArgb(0x70, 0x28, 0x30) : Color.FromArgb(0xFC, 0xD4, 0xD8);
     }
 
     public static void StyleLabel(Label label, bool isHeader = false)
@@ -103,27 +103,30 @@ internal static class Theme
         listBox.Font = new Font(UiFont, 9F);
         listBox.DrawMode = DrawMode.OwnerDrawFixed;
         listBox.ItemHeight = 28;
-        listBox.DrawItem += (sender, e) =>
+        listBox.DrawItem -= OnListBoxDrawItem;
+        listBox.DrawItem += OnListBoxDrawItem;
+    }
+
+    private static void OnListBoxDrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+        var lb = (ListBox)sender!;
+        var text = lb.GetItemText(lb.Items[e.Index]);
+        var isSelected = (e.State & DrawItemState.Selected) != 0;
+
+        using var bgBrush = new SolidBrush(isSelected ? CurrentListSelectedBg : CurrentListBg);
+        e.Graphics.FillRectangle(bgBrush, e.Bounds);
+
+        if (isSelected)
         {
-            if (e.Index < 0) return;
-            var lb = (ListBox)sender!;
-            var text = lb.GetItemText(lb.Items[e.Index]);
-            var isSelected = (e.State & DrawItemState.Selected) != 0;
+            using var accentPen = new Pen(CurrentListSelected, 2);
+            e.Graphics.DrawLine(accentPen, e.Bounds.Left, e.Bounds.Top, e.Bounds.Left, e.Bounds.Bottom);
+        }
 
-            using var bgBrush = new SolidBrush(isSelected ? CurrentListSelectedBg : CurrentListBg);
-            e.Graphics.FillRectangle(bgBrush, e.Bounds);
-
-            if (isSelected)
-            {
-                using var accentPen = new Pen(CurrentListSelected, 2);
-                e.Graphics.DrawLine(accentPen, e.Bounds.Left, e.Bounds.Top, e.Bounds.Left, e.Bounds.Bottom);
-            }
-
-            using var textBrush = new SolidBrush(isSelected ? CurrentListSelected : CurrentTextPrimary);
-            var textRect = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 12, e.Bounds.Height);
-            var format = new StringFormat { LineAlignment = StringAlignment.Center };
-            e.Graphics.DrawString(text, lb.Font, textBrush, textRect, format);
-        };
+        using var textBrush = new SolidBrush(isSelected ? CurrentListSelected : CurrentTextPrimary);
+        var textRect = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 12, e.Bounds.Height);
+        using var format = new StringFormat { LineAlignment = StringAlignment.Center };
+        e.Graphics.DrawString(text, lb.Font, textBrush, textRect, format);
     }
 
     public static void StyleComboBox(ComboBox comboBox)

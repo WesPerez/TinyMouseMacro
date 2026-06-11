@@ -127,6 +127,7 @@ internal static class UiText
     public static string Imported(int count) => $"\u5df2\u5bfc\u5165 {count} \u4e2a\u914d\u7f6e";
     public static string Exported(string path) => $"\u5df2\u5bfc\u51fa\u5230 {path}";
     public static string Chaining(string name) => $"\u94fe\u63a5\u6267\u884c\uff1a{name}";
+    public static string ChainSkipped(string name) => $"\u5df2\u963b\u6b62\u94fe\u63a5\u5b8f\u5faa\u73af\uff1a{name}";
     public const string PixelColor = "\u50cf\u7d20\u989c\u8272";
     public const string PixelTolerance = "\u5bb9\u5dee";
     public const string PixelTimeout = "\u8d85\u65f6\u6beb\u79d2";
@@ -149,6 +150,8 @@ internal static class UiText
     public const string ScheduleInterval = "\u5b9a\u65f6\u95f4\u9694 (\u5206)";
     public const string ExecutionLog = "\u6267\u884c\u65e5\u5fd7";
     public const string Error = "\u9519\u8bef";
+    public const string MouseHook = "\u9f20\u6807\u76d1\u542c";
+    public const string KeyboardHook = "\u952e\u76d8\u76d1\u542c";
     public const string DuplicateStep = "\u590d\u5236\u6b65\u9aa4";
     public const string DuplicatedStep = "\u5df2\u590d\u5236\u6b65\u9aa4";
     public const string SearchHint = "\u641c\u7d22\u914d\u7f6e...";
@@ -158,6 +161,7 @@ internal static class UiText
 
     public static string HotkeyUnknownKey(string key) => $"\u65e0\u6cd5\u8bc6\u522b\u6309\u952e\u201c{key}\u201d";
     public static string HotkeyRegisterFailed(string hotkey, string message) => $"\u5feb\u6377\u952e {hotkey} \u6ce8\u518c\u5931\u8d25\uff08{message}\uff09";
+    public static string HookInstallFailed(string hookName, string message) => $"{hookName}\u5b89\u88c5\u5931\u8d25\uff08{message}\uff09";
     public static string DuplicateHotkey(string hotkey) => $"\u5feb\u6377\u952e {hotkey} \u5df2\u88ab\u5176\u4ed6\u914d\u7f6e\u4f7f\u7528\uff0c\u8bf7\u6362\u4e00\u4e2a";
     public static string DuplicateHookKey(string key) => $"\u5355\u952e {key} \u5df2\u88ab\u5176\u4ed6\u914d\u7f6e\u4f7f\u7528\uff0c\u8bf7\u6362\u4e00\u4e2a";
     public static string DuplicateMouseButton(int button) => $"\u9f20\u6807\u6309\u952e {button} \u5df2\u88ab\u5176\u4ed6\u914d\u7f6e\u4f7f\u7528\uff0c\u8bf7\u6362\u4e00\u4e2a";

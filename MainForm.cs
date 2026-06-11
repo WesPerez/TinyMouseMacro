@@ -2,6 +2,14 @@ namespace TinyMouseMacro;
 
 public sealed class MainForm : Form
 {
+    private const int MaxChainDepth = 32;
+    private const string ThemeRoleAccentButton = "AccentButton";
+    private const string ThemeRoleDangerButton = "DangerButton";
+    private const string ThemeRoleSectionHeader = "SectionHeader";
+    private const string ThemeRoleStatus = "Status";
+    private const string ThemeRoleMonoLabel = "MonoLabel";
+    private const string ThemeRoleMonoTextBox = "MonoTextBox";
+
     private readonly MacroStore _store;
     private readonly MacroExecutor _executor = new();
     private readonly BindingSource _profilesSource = new();
@@ -16,8 +24,9 @@ public sealed class MainForm : Form
     private bool _isBinding;
     private bool _dirty;
     private bool _globalPaused;
-    private int _pauseHotkeyId = 999;
+    private const int PauseHotkeyId = 999;
     private int _dragStepIndex = -1;
+    private MacroProfile? _recordingProfile;
 
     private readonly ListBox _profileList = new();
     private readonly TextBox _nameBox = new();
@@ -93,6 +102,7 @@ public sealed class MainForm : Form
             Width = 110,
             Height = 32,
             Visible = false,
+            Tag = ThemeRoleDangerButton,
             Margin = new Padding(4)
         };
         Theme.StyleDangerButton(_cancelButton);
@@ -105,49 +115,48 @@ public sealed class MainForm : Form
         _hotkeys = new HotkeyService(Handle);
         _hotkeys.HookTriggered += profile =>
         {
-            if (_globalPaused) return;
-            if (!IsDisposed && !Disposing)
+            PostToUi(() =>
             {
-                BeginInvoke(() => RunMacro(profile));
-            }
+                if (!_globalPaused)
+                {
+                    RunMacro(profile);
+                }
+            });
         };
 
         _executor.ChainMacroRequested += chainId =>
         {
-            if (!IsDisposed && !Disposing)
+            PostToUi(() =>
             {
-                BeginInvoke(() =>
+                var target = _profiles.FirstOrDefault(p => p.Id == chainId);
+                if (target is not null && target.Enabled)
                 {
-                    var target = _profiles.FirstOrDefault(p => p.Id == chainId);
-                    if (target is not null && target.Enabled)
-                    {
-                        SetStatus(UiText.Chaining(target.Name));
-                        _ = RunWithCancellationAsync(target);
-                    }
-                });
-            }
+                    SetStatus(UiText.Chaining(target.Name));
+                }
+            });
         };
 
         _recorder = new RecorderService();
         _recorder.StepRecorded += step =>
         {
-            if (!IsDisposed && !Disposing)
+            PostToUi(() =>
             {
-                BeginInvoke(() =>
+                var profile = _recordingProfile ?? CurrentProfile;
+                if (profile is null) return;
+
+                profile.Steps.Add(step);
+                if (ReferenceEquals(profile, CurrentProfile))
                 {
-                    var profile = CurrentProfile;
-                    if (profile is null) return;
-                    profile.Steps.Add(step);
                     RefreshSteps();
                     _stepList.SelectedItem = step;
-                    MarkDirty();
-                });
-            }
+                }
+                MarkDirty();
+            });
         };
 
         KeyDown += MainForm_KeyDown;
 
-        NativeMethods.RegisterHotKey(Handle, _pauseHotkeyId, NativeMethods.ModControl | NativeMethods.ModAlt | NativeMethods.ModNoRepeat, (uint)Keys.P);
+        NativeMethods.RegisterHotKey(Handle, PauseHotkeyId, NativeMethods.ModControl | NativeMethods.ModAlt | NativeMethods.ModNoRepeat, (uint)Keys.P);
     }
 
     private void MainForm_KeyDown(object? sender, KeyEventArgs e)
@@ -174,7 +183,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (m.Msg == NativeMethods.WmHotkey && m.WParam.ToInt32() == _pauseHotkeyId)
+        if (m.Msg == NativeMethods.WmHotkey && m.WParam.ToInt32() == PauseHotkeyId)
         {
             ToggleGlobalPause();
             return;
@@ -218,7 +227,7 @@ public sealed class MainForm : Form
         SaveAll();
         _scheduleTimer.Dispose();
         _positionTimer.Dispose();
-        NativeMethods.UnregisterHotKey(Handle, _pauseHotkeyId);
+        NativeMethods.UnregisterHotKey(Handle, PauseHotkeyId);
         _hotkeys?.Dispose();
         _recorder?.Dispose();
         _trayIcon.Dispose();
@@ -294,6 +303,7 @@ public sealed class MainForm : Form
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
         _statusLabel.AutoEllipsis = true;
+        _statusLabel.Tag = ThemeRoleStatus;
         Theme.StyleStatusBar(_statusLabel);
         statusPanel.Controls.Add(_statusLabel, 0, 0);
         statusPanel.Controls.Add(_cancelButton, 1, 0);
@@ -311,6 +321,7 @@ public sealed class MainForm : Form
         Theme.StylePanel(panel);
 
         var header = new Label { Text = UiText.Profiles, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        header.Tag = ThemeRoleSectionHeader;
         Theme.StyleSectionHeader(header);
         panel.Controls.Add(header, 0, 0);
 
@@ -496,8 +507,6 @@ public sealed class MainForm : Form
         panel.Controls.Add(_hookKeyBox, 5, 1);
         panel.Controls.Add(_mouseButtonBox, 5, 1);
 
-        AddEditorLabel(panel, UiText.Enabled, 0, 2);
-
         return panel;
     }
 
@@ -570,6 +579,7 @@ public sealed class MainForm : Form
 
         _livePositionLabel.Dock = DockStyle.Fill;
         _livePositionLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _livePositionLabel.Tag = ThemeRoleMonoLabel;
         Theme.StyleMonoLabel(_livePositionLabel);
         panel.Controls.Add(_livePositionLabel, 1, 0);
         return panel;
@@ -583,6 +593,7 @@ public sealed class MainForm : Form
         Theme.StylePanel(panel);
 
         var header = new Label { Text = UiText.ScreenInfo, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        header.Tag = ThemeRoleSectionHeader;
         Theme.StyleSectionHeader(header);
         panel.Controls.Add(header, 0, 0);
 
@@ -590,6 +601,7 @@ public sealed class MainForm : Form
         _screenInfoBox.Multiline = true;
         _screenInfoBox.ReadOnly = true;
         _screenInfoBox.ScrollBars = ScrollBars.None;
+        _screenInfoBox.Tag = ThemeRoleMonoTextBox;
         Theme.StyleTextBox(_screenInfoBox);
         _screenInfoBox.Font = new Font(Theme.MonoFont, 8.5F);
         panel.Controls.Add(_screenInfoBox, 0, 1);
@@ -621,6 +633,7 @@ public sealed class MainForm : Form
         Theme.StylePanel(panel);
 
         var header = new Label { Text = UiText.ExecutionLog, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        header.Tag = ThemeRoleSectionHeader;
         Theme.StyleSectionHeader(header);
         panel.Controls.Add(header, 0, 0);
 
@@ -641,7 +654,7 @@ public sealed class MainForm : Form
 
     private Button CreateAccentButton(string text, Action action, int width)
     {
-        var button = new Button { Text = text, Width = width, Height = 32, Margin = new Padding(4) };
+        var button = new Button { Text = text, Width = width, Height = 32, Margin = new Padding(4), Tag = ThemeRoleAccentButton };
         Theme.StyleAccentButton(button);
         button.Click += (_, _) => action();
         return button;
@@ -842,6 +855,16 @@ public sealed class MainForm : Form
         {
             Name = current.Name + UiText.CopySuffix,
             Hotkey = GetNextDefaultHotkey(),
+            TriggerType = current.TriggerType,
+            TriggerKey = current.TriggerKey,
+            // TriggerModifiers is unused — kept in MacroModels for JSON backward compat
+            TriggerMouseButton = current.TriggerMouseButton,
+            RepeatCount = current.RepeatCount,
+            RepeatIntervalMs = current.RepeatIntervalMs,
+            Enabled = current.Enabled,
+            TargetWindowTitle = current.TargetWindowTitle,
+            SpeedMultiplier = current.SpeedMultiplier,
+            ScheduleIntervalMinutes = current.ScheduleIntervalMinutes,
             Steps = current.Steps.Select(CloneStep).ToList()
         };
 
@@ -889,7 +912,8 @@ public sealed class MainForm : Form
                 return;
             }
 
-            foreach (var profile in imported)
+            var normalized = MacroStore.NormalizeProfiles(imported);
+            foreach (var profile in normalized)
             {
                 profile.Id = Guid.NewGuid().ToString("N");
                 if (string.IsNullOrWhiteSpace(profile.Hotkey))
@@ -900,7 +924,7 @@ public sealed class MainForm : Form
             _profilesSource.ResetBindings(false);
             _profileList.SelectedIndex = _profiles.Count - 1;
             MarkDirty();
-            SetStatus(UiText.Imported(imported.Count));
+            SetStatus(UiText.Imported(normalized.Count));
         }
         catch (Exception ex)
         {
@@ -965,13 +989,17 @@ public sealed class MainForm : Form
 
     private static void ReapplyTheme(Control control)
     {
+        var tag = control.Tag as string;
         if (control is Button btn)
         {
-            Theme.StyleButton(btn);
+            if (tag == ThemeRoleDangerButton) Theme.StyleDangerButton(btn);
+            else if (tag == ThemeRoleAccentButton) Theme.StyleAccentButton(btn);
+            else Theme.StyleButton(btn);
         }
         else if (control is TextBoxBase tb)
         {
             Theme.StyleTextBox(tb);
+            if (tag == ThemeRoleMonoTextBox) tb.Font = new Font(Theme.MonoFont, 8.5F);
         }
         else if (control is ListBox lb)
         {
@@ -987,7 +1015,10 @@ public sealed class MainForm : Form
         }
         else if (control is Label lbl)
         {
-            Theme.StyleLabel(lbl);
+            if (tag == ThemeRoleSectionHeader) Theme.StyleSectionHeader(lbl);
+            else if (tag == ThemeRoleStatus) Theme.StyleStatusBar(lbl);
+            else if (tag == ThemeRoleMonoLabel) Theme.StyleMonoLabel(lbl);
+            else Theme.StyleLabel(lbl);
         }
         else if (control is TableLayoutPanel or FlowLayoutPanel or Panel)
         {
@@ -1009,6 +1040,7 @@ public sealed class MainForm : Form
         if (step is null) return;
 
         var dc = NativeMethods.GetDC(0);
+        if (dc == 0) return;
         try
         {
             var point = Cursor.Position;
@@ -1090,19 +1122,25 @@ public sealed class MainForm : Form
         if (_recorder.IsRecording)
         {
             var steps = _recorder.Stop();
-            var profile = CurrentProfile;
-            if (profile is not null)
-            {
-                profile.Steps.AddRange(steps);
-                RefreshSteps();
-                MarkDirty();
-            }
+            _recordingProfile = null;
             SetStatus(UiText.RecordingStopped(steps.Count));
         }
         else
         {
-            _recorder.Start();
-            SetStatus(UiText.RecordingStarted);
+            var profile = CurrentProfile;
+            if (profile is null) return;
+            try
+            {
+                _recordingProfile = profile;
+                _recorder.Start();
+                SetStatus(UiText.RecordingStarted);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _recordingProfile = null;
+                SetStatus(ex.Message);
+                Log($"{UiText.Error}: {ex.Message}");
+            }
         }
     }
 
@@ -1157,6 +1195,7 @@ public sealed class MainForm : Form
         if (profile is null || step is null) return;
 
         var index = profile.Steps.IndexOf(step);
+        if (index < 0) return;
         var copy = CloneStep(step);
         profile.Steps.Insert(index + 1, copy);
         RefreshSteps();
@@ -1238,52 +1277,87 @@ public sealed class MainForm : Form
 
     private async Task RunWithCancellationAsync(MacroProfile profile)
     {
-        CancelExecution();
-        _executionCts = new CancellationTokenSource();
-        _cancelButton.Visible = true;
+        var current = profile;
+        for (var chainDepth = 0; chainDepth < MaxChainDepth; chainDepth++)
+        {
+            using var cts = new CancellationTokenSource();
+            _executionCts = cts;
+            _cancelButton.Visible = true;
+            var completed = false;
+            var canceled = false;
 
-        try
-        {
-            await _executor.RunAsync(profile, _executionCts.Token);
-            if (!IsDisposed)
+            try
             {
-                BeginInvoke(() =>
+                await _executor.RunAsync(current, cts.Token);
+                completed = true;
+                PostToUi(() =>
                 {
-                    _cancelButton.Visible = false;
-                    SetStatus(UiText.Finished(profile.Name));
-                    Log(UiText.Finished(profile.Name));
+                    SetStatus(UiText.Finished(current.Name));
+                    Log(UiText.Finished(current.Name));
                 });
             }
-        }
-        catch (OperationCanceledException)
-        {
-            if (!IsDisposed)
+            catch (OperationCanceledException)
             {
-                BeginInvoke(() =>
+                canceled = true;
+                PostToUi(() =>
                 {
-                    _cancelButton.Visible = false;
-                    SetStatus(UiText.Cancelled(profile.Name));
-                    Log(UiText.Cancelled(profile.Name));
+                    SetStatus(UiText.Cancelled(current.Name));
+                    Log(UiText.Cancelled(current.Name));
                 });
             }
-        }
-        catch (Exception ex)
-        {
-            if (!IsDisposed)
+            catch (Exception ex)
             {
-                BeginInvoke(() =>
+                PostToUi(() =>
                 {
-                    _cancelButton.Visible = false;
                     SetStatus(ex.GetBaseException().Message);
                     Log($"{UiText.Error}: {ex.GetBaseException().Message}");
                 });
             }
+            finally
+            {
+                if (ReferenceEquals(_executionCts, cts))
+                    _executionCts = null;
+            }
+
+            if (!completed || canceled)
+            {
+                PostToUi(() => _cancelButton.Visible = false);
+                return;
+            }
+
+            var chainId = _executor.ConsumeChainMacroId();
+            if (string.IsNullOrWhiteSpace(chainId))
+            {
+                PostToUi(() => _cancelButton.Visible = false);
+                return;
+            }
+
+            var target = _profiles.FirstOrDefault(p => p.Id == chainId);
+            if (target is null || !target.Enabled || target.Id == current.Id)
+            {
+                PostToUi(() =>
+                {
+                    SetStatus(UiText.ChainSkipped(current.Name));
+                    Log(UiText.ChainSkipped(current.Name));
+                    _cancelButton.Visible = false;
+                });
+                return;
+            }
+
+            PostToUi(() =>
+            {
+                SetStatus(UiText.Chaining(target.Name));
+                Log(UiText.Chaining(target.Name));
+            });
+            current = target;
         }
-        finally
+
+        PostToUi(() =>
         {
-            _executionCts?.Dispose();
-            _executionCts = null;
-        }
+            SetStatus(UiText.ChainSkipped(current.Name));
+            Log(UiText.ChainSkipped(current.Name));
+            _cancelButton.Visible = false;
+        });
     }
 
     private void CancelExecution()
@@ -1329,6 +1403,22 @@ public sealed class MainForm : Form
         _livePositionLabel.Text = $"X={point.X}, Y={point.Y}";
     }
 
+    private void PostToUi(Action action)
+    {
+        if (IsDisposed || Disposing) return;
+        if (!IsHandleCreated) return;
+        try
+        {
+            if (InvokeRequired) BeginInvoke(action);
+            else action();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
     private void SetStatus(string message)
     {
         _statusLabel.Text = message;
@@ -1336,14 +1426,10 @@ public sealed class MainForm : Form
 
     private void Log(string message)
     {
-        if (IsDisposed || Disposing) return;
-        BeginInvoke(() =>
-        {
-            var timestamp = DateTime.Now.ToString("HH:mm:ss");
-            _logList.Items.Insert(0, $"[{timestamp}] {message}");
-            while (_logList.Items.Count > 200)
-                _logList.Items.RemoveAt(_logList.Items.Count - 1);
-        });
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        _logList.Items.Insert(0, $"[{timestamp}] {message}");
+        while (_logList.Items.Count > 200)
+            _logList.Items.RemoveAt(_logList.Items.Count - 1);
     }
 
     private static MacroStep CloneStep(MacroStep step)
@@ -1391,7 +1477,7 @@ public sealed class MainForm : Form
 
     private string GetNextDefaultHotkey()
     {
-        var used = _profiles.Select(static profile => profile.Hotkey.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var used = _profiles.Select(static profile => (profile.Hotkey ?? string.Empty).Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var candidates = new[] { "Alt+Z", "Alt+X", "Alt+C", "Alt+V", "Ctrl+Alt+Z", "Ctrl+Alt+X", "Ctrl+Alt+C", "Ctrl+Alt+V" };
         foreach (var candidate in candidates)
         {
@@ -1659,7 +1745,10 @@ internal sealed class StepEditDialog : Form
         if ((step.KeyModifiers & NativeMethods.ModAlt) != 0) _modifierCheckList.SetItemChecked(1, true);
         if ((step.KeyModifiers & NativeMethods.ModShift) != 0) _modifierCheckList.SetItemChecked(2, true);
         if ((step.KeyModifiers & NativeMethods.ModWin) != 0) _modifierCheckList.SetItemChecked(3, true);
-        Theme.StyleListBox(_modifierCheckList);
+        _modifierCheckList.BackColor = Theme.CurrentInputBg;
+        _modifierCheckList.ForeColor = Theme.CurrentTextPrimary;
+        _modifierCheckList.BorderStyle = BorderStyle.FixedSingle;
+        _modifierCheckList.Font = new Font(Theme.UiFont, 9F);
 
         _typeTextBox.Dock = DockStyle.Fill;
         _typeTextBox.Text = step.TextToType;
@@ -1806,7 +1895,7 @@ internal sealed class StepEditDialog : Form
         var isKey = type is MacroStepType.KeyPress or MacroStepType.KeyCombo;
         var isCombo = type == MacroStepType.KeyCombo;
         var isTypeText = type == MacroStepType.TypeText;
-        var isPixel = type is MacroStepType.WaitPixel or MacroStepType.FindPixel;
+        var isPixel = type is MacroStepType.WaitPixel or MacroStepType.FindPixel or MacroStepType.JumpIfPixel;
         var isFindPixel = type == MacroStepType.FindPixel;
         var isScreenshot = type == MacroStepType.Screenshot;
         var isRandomDelay = type == MacroStepType.RandomDelay;
@@ -1816,8 +1905,8 @@ internal sealed class StepEditDialog : Form
         var isChainMacro = type == MacroStepType.ChainMacro;
 
         _xLabel.Visible = _xBox.Visible = isClick || isMove || isDrag || isPixel || isScreenshot;
-        _yLabel.Visible = _yBox.Visible = isClick || isMove || isDrag || isPixel || isScreenshot || isJumpIfPixel;
-        _delayLabel.Visible = _delayBox.Visible = isDelay;
+        _yLabel.Visible = _yBox.Visible = isClick || isMove || isDrag || isPixel || isScreenshot;
+        _delayLabel.Visible = _delayBox.Visible = isDelay || isRandomDelay;
         _dragEndXLabel.Visible = _dragEndXBox.Visible = isDrag;
         _dragEndYLabel.Visible = _dragEndYBox.Visible = isDrag;
         _wheelLabel.Visible = _wheelDeltaBox.Visible = isWheel;

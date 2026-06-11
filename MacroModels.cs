@@ -20,6 +20,8 @@ public sealed class MacroProfile
     public string TargetWindowTitle { get; set; } = string.Empty;
     public double SpeedMultiplier { get; set; } = 1.0;
     public int ScheduleIntervalMinutes { get; set; }
+
+    [JsonIgnore]
     public DateTime? ScheduleNextRun { get; set; }
 
     [JsonIgnore]
@@ -84,7 +86,7 @@ public sealed class MacroStep
         MacroStepType.FindPixel => $"{UiText.FindPixelStepDisplay} 0x{PixelColor:X6} ({X},{Y},{SearchWidth}x{SearchHeight})",
         MacroStepType.Screenshot => $"{UiText.ScreenshotStepDisplay} ({X},{Y},{SearchWidth}x{SearchHeight})",
         MacroStepType.RandomDelay => $"{UiText.RandomDelayStepDisplay} {DelayMs}-{DelayMsMax} {UiText.Milliseconds}",
-        MacroStepType.JumpIfPixel => $"{UiText.JumpIfPixelStepDisplay} \u2192 {UiText.Step} {JumpToStepIndex + 1}",
+        MacroStepType.JumpIfPixel => $"{UiText.JumpIfPixelStepDisplay} ({X},{Y}) 0x{PixelColor:X6} \u2192 {UiText.Step} {JumpToStepIndex + 1}",
         MacroStepType.RunProgram => $"{UiText.RunProgramStepDisplay} {Path.GetFileName(RunProgramPath)}",
         MacroStepType.PlaySound => $"{UiText.PlaySoundStepDisplay} {Path.GetFileName(SoundFilePath)}",
         MacroStepType.ChainMacro => $"{UiText.ChainMacroStepDisplay}",
